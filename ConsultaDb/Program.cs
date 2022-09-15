@@ -24,6 +24,18 @@ namespace ConsultaDb
             // Chamando o metodo de criar as pastas passando a pasta.
             CreateDirectory(tablesPath);
 
+            Console.ForegroundColor
+                    = ConsoleColor.Blue;
+            Console.WriteLine("X---------------------------X", Console.ForegroundColor);
+            Console.ResetColor();
+            Console.WriteLine("X Developed by Christian X");
+            Console.WriteLine("X Developed by Vitor     X");
+            Console.ForegroundColor
+                    = ConsoleColor.Blue;
+            Console.WriteLine("X---------------------------X", Console.ForegroundColor);
+            Console.ResetColor();
+
+
             //Conexão BD
             const string connectionString = "Data Source=CLK-NOTE_24\\SQLEXPRESS; Initial Catalog=PESSOA; Integrated Security=SSPI;";
             Console.WriteLine("Validando conexão");
