@@ -18,26 +18,29 @@ namespace ConsultaDb
         //Criação das pastas
         public static string rootFolder = @"c:\temporario\";
         public static string tablesPath = Path.Combine(rootFolder, "tables");
+        public static string ABRIRPASTA = Path.Join(tablesPath);
+
 
         static void Main(string[] args)
         {
             // Chamando o metodo de criar as pastas passando a pasta.
             CreateDirectory(tablesPath);
 
+            #region Console version
             Console.ForegroundColor
                     = ConsoleColor.Blue;
             Console.WriteLine("X---------------------------X", Console.ForegroundColor);
             Console.ResetColor();
-            Console.WriteLine("X Developed by Christian X");
-            Console.WriteLine("X Developed by Vitor     X");
+            Console.WriteLine("| V1 CONSULTA EM TABELA    |");
+            Console.WriteLine("| V1 CONSULTA EM COLUNAS   |");
             Console.ForegroundColor
                     = ConsoleColor.Blue;
             Console.WriteLine("X---------------------------X", Console.ForegroundColor);
             Console.ResetColor();
-
+            #endregion
 
             //Conexão BD
-            const string connectionString = "Data Source=CLK-NOTE_24\\SQLEXPRESS; Initial Catalog=PESSOA; Integrated Security=SSPI;";
+            const string connectionString = "Data Source=CLK-NOTE_24\\SQLEXPRESS; Initial Catalog=ESCOLA; Integrated Security=SSPI;";
             Console.WriteLine("Validando conexão");
             var sqlCon = new SqlConnection(connectionString);
 
@@ -84,25 +87,9 @@ namespace ConsultaDb
                     sqlCon.Close();
                 }
 
-                Console.ReadLine();
-            }
-            static IDataReader GetObjects(string p, SqlConnection sqlCon)
-            {
-                try
-                {
-                    return sqlCon.ExecuteReader($"EXEC SP_HELPTEXT {p}");
-                }
-                catch (Exception ex)
-                {
-                    p = p.Replace(".", "_");
-                    string file = $@"c:\temp\errors\{p}.txt";
+                Console.WriteLine("Script gerado com sucesso, pressione qualquer tecla para ENCERRAR o programa");
+                Console.ReadKey();
 
-                    DeleteFile(file);
-
-                    File.WriteAllText($@"c:\temp\errors\{p}.txt", ex.Message);
-
-                    return null;
-                }
             }
 
             static void AlterTables(List<Tables> objects)
@@ -120,13 +107,13 @@ namespace ConsultaDb
                         tables.AppendLine("(");
                         int cont = 0;
                         int total = t.Columns.Count;
-                        t.Columns.ForEach( (c) =>
+                        t.Columns.ForEach((c) =>
                         {
                             //Primeira condição percorre o Length para tirar as virgulas de todas tabelas
                             if (cont == (total - 1))
                             {
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                                if(c.length == null)
+                                if (c.length == null)
                                     tables.Append($"    {c.name} {c.type} ");
                                 else
                                     tables.Append($"    {c.name} {c.type} ({c.length}) "); //Example: varchar(25) or int (null)
@@ -155,6 +142,25 @@ namespace ConsultaDb
                         tables.AppendLine("END");
                         tables.AppendLine("GO");
                         tables.AppendLine();
+                        tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
+                        tables.AppendLine();
+                        // VERIFICAR AS COLUNAS
+                        t.Columns.ForEach((c) =>
+                        {
+                            tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
+                            tables.Append($" BEGIN ALTER TABLE {t.TableName}");
+
+                                //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
+                                if (c.length == null)
+                                    tables.Append($" ADD {c.name} {c.type}");
+                                else
+                                    tables.Append($" ADD {c.name} {c.type} ({c.length})"); //Example: varchar(25) or int (null)
+                                if (c.nullable == "NO")
+                                    tables.AppendLine($" not null");
+                                else
+                                    tables.AppendLine($"null");
+                            tables.AppendLine($" END GO");
+                        });
                         tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
                         tables.AppendLine();
                     });
@@ -217,4 +223,3 @@ namespace ConsultaDb
         }
     }
 }
-
