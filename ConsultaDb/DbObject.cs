@@ -20,5 +20,8 @@ namespace ConsultaDb
         public string type { get; set; }
         public string length { get; set; }
         public string nullable { get; set; }
+        public int is_identity { get; set; }
     }
+
+
 }

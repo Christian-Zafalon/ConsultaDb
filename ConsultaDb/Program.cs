@@ -75,10 +75,23 @@ namespace ConsultaDb
 
                 tables.ForEach(t =>
                 {
-                    string columnTables = $@"select COLUMN_NAME as name, DATA_TYPE as type, CHARACTER_MAXIMUM_LENGTH as length, IS_NULLABLE as nullable from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = '{t.TableName}'";
+                    string columnTables = $@"SELECT COLUMN_NAME as name,DATA_TYPE as type,CHARACTER_MAXIMUM_LENGTH as length,IS_NULLABLE as nullable, 
+                                            (SELECT 1 FROM SYS.COLUMNS WHERE NAME = COLUMN_NAME AND IS_IDENTITY = 1) as is_identity 
+                                            FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{t.TableName}'";
+
 
                     t.Columns = sqlCon.Query<Column>(columnTables).ToList();
                 });
+
+                //tables.ForEach(t =>
+                //{
+                //    t.Columns.ForEach((c) =>
+                //    {
+                //        string isIdentity = $@"select name as NomeIdentity, is_identity as BoolIdentity FROM SYS.COLUMNS WHERE object_id = Object_ID('{t.TableName}') and NAME like '%{c.name}%' AND IS_IDENTITY = 1";
+
+                //        c.Increment = sqlCon.Query<Increment>(isIdentity).ToList();
+                //    });
+                //});
 
                 AlterTables(tables);
 
@@ -112,9 +125,10 @@ namespace ConsultaDb
                             //Primeira condição percorre o Length para tirar as virgulas de todas tabelas
                             if (cont == (total - 1))
                             {
+
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                                if (c.length == null)
-                                    tables.Append($"    {c.name} {c.type} ");
+                                if (c.length == null && c.is_identity == 1)
+                                    tables.Append($"{c.name} {c.type} IDENTITY(1,1) ");
                                 else
                                     tables.Append($"    {c.name} {c.type} ({c.length}) "); //Example: varchar(25) or int (null)
                                 if (c.nullable == "NO")
@@ -125,8 +139,8 @@ namespace ConsultaDb
                             //else coloca virgula
                             else
                             {
-                                if (c.length == null)
-                                    tables.Append($"    {c.name} {c.type} ");
+                                if (c.length == null && c.is_identity == 1)
+                                    tables.Append($"    {c.name} {c.type} IDENTITY(1,1) ");
                                 else
                                     tables.Append($"    {c.name} {c.type} ({c.length}) ");
 
@@ -149,18 +163,18 @@ namespace ConsultaDb
                         {
                             tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
                             tables.Append($" BEGIN ALTER TABLE {t.TableName}");
-
-                                //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                                if (c.length == null)
-                                    tables.Append($" ADD {c.name} {c.type}");
-                                else
-                                    tables.Append($" ADD {c.name} {c.type} ({c.length})"); //Example: varchar(25) or int (null)
-                                if (c.nullable == "NO")
-                                    tables.AppendLine($" not null");
-                                else
-                                    tables.AppendLine($"null");
-                            tables.AppendLine($" END GO");
+                            //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
+                            if (c.length == null && c.is_identity == 1)
+                                tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1)");
+                            else
+                                tables.Append($" ADD {c.name} {c.type} ({c.length})"); //Example: varchar(25) or int (null)
+                            if (c.nullable == "NO")
+                                tables.AppendLine($" not null");
+                            else
+                                tables.AppendLine($"null");
+                            tables.AppendLine($" END");
                         });
+                        tables.AppendLine($"GO");
                         tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
                         tables.AppendLine();
                     });
