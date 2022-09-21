@@ -40,7 +40,7 @@ namespace ConsultaDb
             #endregion
 
             //Conexão BD
-            const string connectionString = "Data Source=CLK-NOTE_24\\SQLEXPRESS; Initial Catalog=ESCOLA; Integrated Security=SSPI;";
+            const string connectionString = "Data Source=CLK-NOTE_60;Initial Catalog=bd_testes; Integrated Security=SSPI;";
             Console.WriteLine("Validando conexão");
             var sqlCon = new SqlConnection(connectionString);
 
@@ -127,10 +127,10 @@ namespace ConsultaDb
                             {
 
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                                if (c.length == null && c.is_identity == 1)
+                                if (c.type == "int" && c.is_identity == 1)
                                     tables.Append($"{c.name} {c.type} IDENTITY(1,1) ");
                                 else
-                                    tables.Append($"    {c.name} {c.type} ({c.length}) "); //Example: varchar(25) or int (null)
+                                    tables.Append($"    {c.name} {c.type}({c.length}) "); //Example: varchar(25) or int (null)
                                 if (c.nullable == "NO")
                                     tables.AppendLine($" not null");
                                 else
@@ -142,7 +142,7 @@ namespace ConsultaDb
                                 if (c.length == null && c.is_identity == 1)
                                     tables.Append($"    {c.name} {c.type} IDENTITY(1,1) ");
                                 else
-                                    tables.Append($"    {c.name} {c.type} ({c.length}) ");
+                                    tables.Append($"    {c.name} {c.type}({c.length}) ");
 
                                 if (c.nullable == "NO")
                                     tables.AppendLine($" not null,");
@@ -156,18 +156,20 @@ namespace ConsultaDb
                         tables.AppendLine("END");
                         tables.AppendLine("GO");
                         tables.AppendLine();
-                        tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
+                        //tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
                         tables.AppendLine();
                         // VERIFICAR AS COLUNAS
                         t.Columns.ForEach((c) =>
                         {
                             tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
-                            tables.Append($" BEGIN ALTER TABLE {t.TableName}");
+                            tables.AppendLine();
+                            tables.AppendLine($"BEGIN");
+                            tables.Append($"ALTER TABLE {t.TableName}");
                             //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                            if (c.length == null && c.is_identity == 1)
+                            if (c.type == "int" && c.is_identity == 1)
                                 tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1)");
                             else
-                                tables.Append($" ADD {c.name} {c.type} ({c.length})"); //Example: varchar(25) or int (null)
+                                tables.Append($" ADD {c.name} {c.type}({c.length})"); //Example: varchar(25) or int (null)
                             if (c.nullable == "NO")
                                 tables.AppendLine($" not null");
                             else
