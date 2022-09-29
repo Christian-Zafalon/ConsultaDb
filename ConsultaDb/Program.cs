@@ -154,7 +154,7 @@ namespace ConsultaDb
                         tables.AppendLine("END");
                         tables.AppendLine("GO");
                         tables.AppendLine();
-                        //tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
+                        //tables.AppendLine("-----------------------------------------------------------------------------------------------------------------");
                         tables.AppendLine();
                         // VERIFICAR AS COLUNAS
                         t.Columns.ForEach((c) =>
