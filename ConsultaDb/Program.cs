@@ -23,7 +23,7 @@ namespace ConsultaDb
 
         static void Main(string[] args)
         {
-            // Chamando o metodo de criar as pastas passando a pasta.
+            // Chamando o metodo de criar as pastas passando a pasta...
             CreateDirectory(tablesPath);
 
             #region Console version
