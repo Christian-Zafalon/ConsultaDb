@@ -40,7 +40,7 @@ namespace ConsultaDb
             #endregion
 
             //Conexão BD
-            const string connectionString = "Data Source=CLK-NOTE_24\\SQLEXPRESS; Initial Catalog=AdventureWorks2019; Integrated Security=SSPI;";
+            const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=ESCOLA; Integrated Security=SSPI;";
             Console.WriteLine("Validando conexão");
             var sqlCon = new SqlConnection(connectionString);
 
@@ -75,13 +75,30 @@ namespace ConsultaDb
 
                  tables.ForEach(t =>
                 {
-                    string columnTables = $@"SELECT COLUMN_NAME as name,
-                                            DATA_TYPE as type, 
-                                            CHARACTER_MAXIMUM_LENGTH as length, 
-                                            IS_NULLABLE as nullable,
-                                            (SELECT 1 FROM SYS.COLUMNS WHERE NAME = COLUMN_NAME AND IS_IDENTITY = 1) as is_identity 
-                                            FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{t.TableName}';";
-
+                    string columnTables = $@"DROP TABLE IF EXISTS #TEMP_PK 
+                                            DROP TABLE IF EXISTS #TEMP_FK 
+                                            DROP TABLE IF EXISTS #TEMP_LEGACY 
+                                            IF OBJECT_ID('#TEMP_PK', N'U') IS NULL 
+                                            BEGIN 
+                                            SELECT COLUMN_NAME AS PRIMARYKEY INTO #TEMP_PK 
+                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                                            WHERE CONSTRAINT_NAME LIKE '%PK%' 
+                                            AND TABLE_NAME = '{t.TableName}' END 
+                                            IF OBJECT_ID('#TEMP_FK', N'U') IS NULL 
+                                            BEGIN 
+                                            SELECT COLUMN_NAME AS FORENGKEY INTO #TEMP_FK 
+                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                                            WHERE CONSTRAINT_NAME  LIKE '%FK%' 
+                                            AND TABLE_NAME = '{t.TableName}' 
+                                            END 
+                                            IF OBJECT_ID('#TEMP_LEGACY', N'U') IS NULL 
+                                            BEGIN 
+                                            SELECT COLUMN_NAME AS NAME, DATA_TYPE AS TYPE, CHARACTER_MAXIMUM_LENGTH AS LENGTH, IS_NULLABLE AS NULLABLE, COLLATION_NAME AS COLLATION, 
+                                            (SELECT DISTINCT 1 FROM SYS.COLUMNS WHERE NAME = COLUMN_NAME AND IS_IDENTITY  > 0) AS IS_IDENTITY INTO #TEMP_LEGACY 
+                                            FROM INFORMATION_SCHEMA.COLUMNS 
+                                            WHERE TABLE_NAME = '{t.TableName}' 
+                                            END 
+                                            SELECT * FROM #TEMP_LEGACY, #TEMP_PK, #TEMP_FK;";
 
                     t.Columns = sqlCon.Query<Column>(columnTables).ToList();
                 });
@@ -121,11 +138,11 @@ namespace ConsultaDb
 
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
                                 if (c.length == null && c.is_identity == 1)
-                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) ");
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.forengkey}");
                                 else if (c.length == null)
                                     tables.Append($" {c.name} {c.type}");
                                 else
-                                    tables.Append($" {c.name} {c.type}({c.length}) "); //Example: varchar(25) or int (null)
+                                    tables.Append($" {c.name} {c.type}({c.length})"); //Example: varchar(25) or int (null)
                                 if (c.nullable == "NO")
                                     tables.AppendLine($" not null ");
                                 else
@@ -136,7 +153,7 @@ namespace ConsultaDb
                             else
                             {
                                 if (c.length == null && c.is_identity == 1)
-                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) ");
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1)  MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.forengkey}");
                                 else if (c.length == null)
                                     tables.Append($" {c.name} {c.type}");
                                 else

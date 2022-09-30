@@ -9,9 +9,9 @@ namespace ConsultaDb
     public class Tables
     {
         public string TableName { get; set; }
-        
+
         public List<Column> Columns { get; set; }
-        
+
     }
 
     public class Column
@@ -21,6 +21,9 @@ namespace ConsultaDb
         public string length { get; set; }
         public string nullable { get; set; }
         public int is_identity { get; set; }
+        public string collation { get; set; }
+        public string primarykey { get; set; }
+        public string forengkey { get; set; }
     }
 
 
