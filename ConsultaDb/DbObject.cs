@@ -23,7 +23,7 @@ namespace ConsultaDb
         public int is_identity { get; set; }
         public string collation { get; set; }
         public string primarykey { get; set; }
-        public string forengkey { get; set; }
+        public string foreignkey { get; set; }
     }
 
 

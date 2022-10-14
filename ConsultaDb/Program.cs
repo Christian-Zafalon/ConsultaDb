@@ -75,30 +75,75 @@ namespace ConsultaDb
 
                  tables.ForEach(t =>
                 {
-                    string columnTables = $@"DROP TABLE IF EXISTS #TEMP_PK 
-                                            DROP TABLE IF EXISTS #TEMP_FK 
-                                            DROP TABLE IF EXISTS #TEMP_LEGACY 
-                                            IF OBJECT_ID('#TEMP_PK', N'U') IS NULL 
-                                            BEGIN 
-                                            SELECT COLUMN_NAME AS PRIMARYKEY INTO #TEMP_PK 
-                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                                            WHERE CONSTRAINT_NAME LIKE '%PK%' 
-                                            AND TABLE_NAME = '{t.TableName}' END 
-                                            IF OBJECT_ID('#TEMP_FK', N'U') IS NULL 
-                                            BEGIN 
-                                            SELECT COLUMN_NAME AS FORENGKEY INTO #TEMP_FK 
-                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                                            WHERE CONSTRAINT_NAME  LIKE '%FK%' 
-                                            AND TABLE_NAME = '{t.TableName}' 
-                                            END 
-                                            IF OBJECT_ID('#TEMP_LEGACY', N'U') IS NULL 
-                                            BEGIN 
-                                            SELECT COLUMN_NAME AS NAME, DATA_TYPE AS TYPE, CHARACTER_MAXIMUM_LENGTH AS LENGTH, IS_NULLABLE AS NULLABLE, COLLATION_NAME AS COLLATION, 
-                                            (SELECT DISTINCT 1 FROM SYS.COLUMNS WHERE NAME = COLUMN_NAME AND IS_IDENTITY  > 0) AS IS_IDENTITY INTO #TEMP_LEGACY 
-                                            FROM INFORMATION_SCHEMA.COLUMNS 
-                                            WHERE TABLE_NAME = '{t.TableName}' 
-                                            END 
-                                            SELECT * FROM #TEMP_LEGACY, #TEMP_PK, #TEMP_FK;";
+                    string columnTables = $@"	DROP TABLE IF EXISTS #TEMP_PK 
+	                                            DROP TABLE IF EXISTS #TEMP_FK 
+	                                            DROP TABLE IF EXISTS #TEMP_LEGACY 
+	                                            CREATE TABLE #TEMP_PK
+	                                            (
+		                                            primarykey nvarchar (100)
+	                                            )
+	                                            CREATE TABLE #TEMP_FK
+	                                            (
+		                                            foreignkey nvarchar (100)
+	                                            )
+	                                            --PEGANDO AS CHAVES PRIMARIAS CASO EXISTA
+	                                            IF EXISTS(
+			                                            SELECT COLUMN_NAME
+			                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+			                                            WHERE CONSTRAINT_NAME  LIKE '%PK%' 
+			                                            AND TABLE_NAME = '{t.TableName}')
+		                                            BEGIN
+			                                            INSERT INTO #TEMP_PK (primarykey)
+				                                            SELECT COLUMN_NAME AS primarykey
+				                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+				                                            WHERE CONSTRAINT_NAME LIKE '%PK%' 
+				                                            AND TABLE_NAME = '{t.TableName}'			 
+		                                            END
+	                                            -- PEGANDO AS CHAVES ESTRANGEIRAS CASO EXISTA
+	                                            IF EXISTS(
+			                                            SELECT COLUMN_NAME
+			                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+			                                            WHERE CONSTRAINT_NAME  LIKE '%FK%' 
+			                                            AND TABLE_NAME = '{t.TableName}')
+		                                            BEGIN
+			                                            INSERT INTO #TEMP_FK (foreignkey)
+				                                            SELECT COLUMN_NAME AS foreignkey
+				                                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+				                                            WHERE CONSTRAINT_NAME  LIKE '%FK%' 
+				                                            AND TABLE_NAME = '{t.TableName}'
+		                                            END
+	                                            IF OBJECT_ID('#TEMP_LEGACY', N'U') IS NULL 
+		                                            BEGIN 
+			                                            SELECT COLUMN_NAME AS NAME, 
+			                                            DATA_TYPE AS TYPE, 
+			                                            CHARACTER_MAXIMUM_LENGTH AS LENGTH, 
+			                                            IS_NULLABLE AS NULLABLE, 
+			                                            COLLATION_NAME AS COLLATION, 
+			                                            (SELECT DISTINCT 1 FROM SYS.COLUMNS WHERE NAME = COLUMN_NAME AND IS_IDENTITY  > 0) AS IS_IDENTITY INTO #TEMP_LEGACY 
+			                                            FROM INFORMATION_SCHEMA.COLUMNS 
+			                                            WHERE TABLE_NAME = '{t.TableName}' 
+	                                            END
+
+	                                            --REALIZANDO OS SELECTS
+	                                            DECLARE @retornoPK int
+	                                            DECLARE @retornoFK int
+
+	                                            SELECT @retornoPK = COUNT(*) FROM #TEMP_PK;
+	                                            SELECT @retornoFK = COUNT(*) FROM #TEMP_FK;
+
+	                                            IF (@retornoPK > 0 AND @retornoFK > 0)
+		                                            BEGIN
+			                                            SELECT * FROM #TEMP_LEGACY, #TEMP_PK, #TEMP_FK
+		                                            END
+	                                            ELSE
+	                                            IF (@retornoPK > 0)
+		                                            BEGIN
+			                                            SELECT * FROM #TEMP_LEGACY, #TEMP_PK
+		                                            END
+	                                            ELSE
+		                                            BEGIN
+			                                            SELECT * FROM #TEMP_LEGACY, #TEMP_FK
+		                                            END";
 
                     t.Columns = sqlCon.Query<Column>(columnTables).ToList();
                 });
@@ -138,7 +183,7 @@ namespace ConsultaDb
 
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
                                 if (c.length == null && c.is_identity == 1)
-                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.forengkey}");
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.foreignkey}");
                                 else if (c.length == null)
                                     tables.Append($" {c.name} {c.type}");
                                 else
@@ -153,14 +198,14 @@ namespace ConsultaDb
                             else
                             {
                                 if (c.length == null && c.is_identity == 1)
-                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1)  MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.forengkey}");
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1)  MANO FUNCIONOU, ESTA É A PK {c.primarykey} {c.foreignkey}");
                                 else if (c.length == null)
                                     tables.Append($" {c.name} {c.type}");
                                 else
                                     tables.Append($" {c.name} {c.type}({c.length})"); //Example: varchar(25) or int (null)
 
                                 if (c.nullable == "NO")
-                                    tables.AppendLine($" not null,");
+                                        tables.AppendLine($" not null,");
                                 else
                                     tables.AppendLine($" null,");
 
