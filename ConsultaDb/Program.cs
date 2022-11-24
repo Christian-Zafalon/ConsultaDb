@@ -40,7 +40,8 @@ namespace ConsultaDb
             #endregion
 
             //Conexão BD
-            const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=PROJETO; Integrated Security=SSPI;";
+            const string connectionString = "Data Source=10.100.2.9; Initial Catalog=dbComlink_off_dev_fugini; Integrated Security=SSPI;";
+            //const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=CLONETESTE; Integrated Security=SSPI;";
             Console.WriteLine("Validando conexão");
             var sqlCon = new SqlConnection(connectionString);
 
@@ -216,14 +217,22 @@ namespace ConsultaDb
                         tables.AppendLine($"    CREATE TABLE {t.TableName}");
                         tables.AppendLine("(");
                         int cont = 0;
+                        var listPK = new List<String>();
                         int total = t.Columns.Count;
                         t.Columns.ForEach((c) =>
                         {
+                            var Primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
+                            if (Primary > 1 && c.type_constraints == "PRIMARY KEY")
+                            {
+                                listPK.Add(c.column_constraints);
+                            }
+                            if (c.length == "-1")
+                                c.length = "max";
                             var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint" };
 
-                            if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1)
+                            if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && Primary == 1)
                                 tables.Append($" {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
-                            else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0)
+                            else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && Primary == 1)
                                 tables.Append($" {c.name} {c.type} PRIMARY KEY");
                             else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
                                 tables.Append($" {c.name} {c.type} IDENTITY(1,1)");
@@ -248,9 +257,17 @@ namespace ConsultaDb
                             if (cont == (total - 1))
                             {
                                 if (c.nullable == "NO")
+                                {
                                     tables.AppendLine($" NOT NULL");
-                                else
+                                }
+                                else {
                                     tables.AppendLine($" NULL");
+                                    if (listPK.Any(x => x == "") && Primary > 1)  // PENSAR NA LOGICA AQUI
+                                    {
+                                        tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK)})");
+                                    }
+                                    tables.AppendLine(")");
+                                }
                             }
                             else
                             {
@@ -260,10 +277,6 @@ namespace ConsultaDb
                                     tables.AppendLine($" NULL,");
                             }
                             cont++;
-                            if (total == cont)
-                            {
-                                tables.AppendLine(")");
-                            }
                             
                         });
                         t.Columns.ForEach((c) => {
