@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ConsultaDb
 {
@@ -41,7 +42,9 @@ namespace ConsultaDb
 
             //Conexão BD
             const string connectionString = "Data Source=10.100.2.9; Initial Catalog=dbComlink_off_dev_fugini; Integrated Security=SSPI;";
-            //const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=CLONETESTE; Integrated Security=SSPI;";
+
+            //const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=CLONE; Integrated Security=SSPI;";
+
             Console.WriteLine("Validando conexão");
             var sqlCon = new SqlConnection(connectionString);
 
@@ -74,7 +77,8 @@ namespace ConsultaDb
                 #endregion
                 List<Tables> tables = sqlCon.Query<Tables>(sqlTables).ToList();
 
-                 tables.ForEach(t =>
+                #region TRAZ as colunas
+                tables.ForEach(t =>
                 {
                     string columnTables = $@"	DROP TABLE IF EXISTS #TEMP_DEFAULT
                                                 DROP TABLE IF EXISTS #TEMP_LEGACY
@@ -130,7 +134,7 @@ namespace ConsultaDb
                                                         left outer join sys.all_columns col
                                                             on con.parent_column_id = col.column_id
                                                             and con.parent_object_id = col.object_id
-					                                                where t.[name] like '%{t.TableName}%'
+					                                                where t.[name] = '{t.TableName}'
 
 
                                                 --UNINDO TODOS SELECTS
@@ -189,8 +193,8 @@ namespace ConsultaDb
 
                     t.Columns = sqlCon.Query<Column>(columnTables).ToList();
                 });
+                #endregion
 
-                
                 AlterTables(tables);
 
                 if (sqlCon.State == ConnectionState.Open)
@@ -218,68 +222,125 @@ namespace ConsultaDb
                         tables.AppendLine("(");
                         int cont = 0;
                         var listPK = new List<String>();
+                        var listPK1 = new List<String>();
+                        var listFK = new List<String>();
                         int total = t.Columns.Count;
+                        int totalinit = t.Columns.Count;
                         t.Columns.ForEach((c) =>
                         {
-                            var Primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
-                            if (Primary > 1 && c.type_constraints == "PRIMARY KEY")
+
+                            var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
+                            if (primary > 1 && c.type_constraints == "PRIMARY KEY")
                             {
                                 listPK.Add(c.column_constraints);
                             }
-                            if (c.length == "-1")
-                                c.length = "max";
-                            var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint" };
 
-                            if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && Primary == 1)
-                                tables.Append($" {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
-                            else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && Primary == 1)
-                                tables.Append($" {c.name} {c.type} PRIMARY KEY");
-                            else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
-                                tables.Append($" {c.name} {c.type} IDENTITY(1,1)");
-                            else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name && c.type_constraints == "UNIQUE")
-                                tables.Append($" {c.name} {c.type} IDENTITY(1,1) UNIQUE");
-                            else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints != "UNIQUE")
-                                tables.Append($" {c.name} {c.type}"); //Exemplo: int UNIQUE (somente)
-                            else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
-                                tables.Append($" {c.name} {c.type} UNIQUE"); //Exemplo: int (somente)
-                            else if (c.prec != null)
-                                tables.Append($" {c.name} {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
-                            else if (c.prec != null && c.type_constraints == "UNIQUE")
-                                tables.Append($" {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
-                            else if (c.length == null && c.type_constraints == "UNIQUE")
-                                tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
-                            else if (c.length == null)
-                                tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
-                            else if (c.length != null && c.type_constraints == "UNIQUE")
-                                tables.Append($" {c.name} {c.type}({c.length}) UNIQUE"); //Exemplo: varchar(25) or int (null) UNIQUE
-                            else
-                                tables.Append($" {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
-                            if (cont == (total - 1))
+                            var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
+                            //var primary1 = chavesPK1.Count();
+                            var addListPK1 = from listpk1 in chavesPK1 select listpk1;
+                            foreach (var listpk1 in addListPK1)
                             {
-                                if (c.nullable == "NO")
+                                listPK1.Add(listpk1.column_constraints);
+                            }
+
+                            var filtroFKReferenciada = t.Columns.Where(x => x.type_constraints == "FOREIGN KEY" && listPK1.Any(x => x == c.column_constraints)).ToList();
+                            var contFK = filtroFKReferenciada.Count();
+                            var listFKRef = from listfkref in filtroFKReferenciada select listfkref;
+
+                            foreach (var listfkref in listFKRef)
+                            {
+                                listFK.Add(listfkref.type_constraints);
+                            }
+
+                            if (total == totalinit)
+                            {
+                                var Foreign = t.Columns.Count(fk => fk.type_constraints == "FOREIGN KEY");
+                                if (Foreign > 1 && c.type_constraints == "FOREIGN KEY")
                                 {
-                                    tables.AppendLine($" NOT NULL");
-                                }
-                                else {
-                                    tables.AppendLine($" NULL");
-                                    if (listPK.Any(x => x == "") && Primary > 1)  // PENSAR NA LOGICA AQUI
-                                    {
-                                        tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK)})");
-                                    }
-                                    tables.AppendLine(")");
+                                    total -= Foreign;
                                 }
                             }
-                            else
+
+                            // VERIFICAR POR QUE TA PREENCHENDO SÓ UM tabela(GRUCOMPRA)
+
+                            if (contFK <= 0 || listFK.Any(x => x != c.type_constraints))
                             {
-                                if (c.nullable == "NO")
-                                    tables.AppendLine($" NOT NULL,");
+
+                                if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
+                                    c.length = "max";// Então forcei ele retornar "max"
+
+                                var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint", "smallint" };
+
+                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary == 1)
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
+
+                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary == 1)
+                                    tables.Append($" {c.name} {c.type} PRIMARY KEY");
+
+                                else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1)");
+
+                                else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name && c.type_constraints == "UNIQUE")
+                                    tables.Append($" {c.name} {c.type} IDENTITY(1,1) UNIQUE");
+
+                                else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints != "UNIQUE")
+                                    tables.Append($" {c.name} {c.type}"); //Exemplo: int (somente)
+
+                                else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
+                                    tables.Append($" {c.name} {c.type} UNIQUE"); //Exemplo: int  UNIQUE
+
+                                else if (c.prec != null)
+                                    tables.Append($" {c.name} {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
+
+                                else if (c.prec != null && c.type_constraints == "UNIQUE")
+                                    tables.Append($" {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
+
+                                //else if (c.length == null && c.type_constraints == "UNIQUE")
+                                //    tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
+
+                                else if (c.length == null)
+                                    tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
+
+                                else if (c.length != null && c.type_constraints == "UNIQUE")
+                                    tables.Append($" {c.name} {c.type}({c.length}) UNIQUE"); //Exemplo: varchar(25) or int (null) UNIQUE
+
+                                else if (c.type == "image" || c.type == "text")
+                                    tables.Append($" {c.name} {c.type}"); //Exemplo: image
+
                                 else
-                                    tables.AppendLine($" NULL,");
+                                    tables.Append($" {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
+
+                                if (cont == (total - 1))
+                                {
+                                    if (c.nullable == "NO")
+                                    {
+                                        tables.AppendLine($" NOT NULL");
+                                        tables.AppendLine(")");
+                                    }
+                                    else
+                                    {
+                                        tables.AppendLine($" NULL");
+                                        if (listPK.Any(x => x == x) && primary > 1)  // PENSAR NA LOGICA AQUI
+                                        {
+                                            tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK)})");
+                                        }
+                                        tables.AppendLine(")");
+                                    }
+                                }
+                                else
+                                {
+                                    if (c.nullable == "NO")
+                                        tables.AppendLine($" NOT NULL,");
+                                    else
+                                        tables.AppendLine($" NULL,");
+                                }
+                                cont++;
                             }
-                            cont++;
                             
+                            Console.WriteLine(c.name, c.type_constraints);
                         });
-                        t.Columns.ForEach((c) => {
+                        t.Columns.ForEach((c) =>
+                        {
                             if (c.type_constraints == "FOREIGN KEY")
                                 tables.AppendLine($" ALTER TABLE {t.TableName} ADD CONSTRAINT {c.name_constraint} FOREIGN KEY ({c.column_constraints}) REFERENCES {c.referenced_object} ({c.column_constraints});");
 
@@ -288,7 +349,7 @@ namespace ConsultaDb
 
 
                         });
-                      //  tables.AppendLine(")");
+                        //  tables.AppendLine(")");
                         tables.AppendLine("END");
                         tables.AppendLine("GO");
                         tables.AppendLine();
@@ -297,37 +358,54 @@ namespace ConsultaDb
                         // VERIFICAR AS COLUNAS
                         t.Columns.ForEach((c) =>
                         {
-                            var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint" };
-                            tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
-                            tables.AppendLine();
-                            tables.AppendLine($"BEGIN");
-                            tables.Append($"ALTER TABLE {t.TableName}");
-                            //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                            if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1)
-                                tables.AppendLine($" ADD {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
-                            else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0)
-                                tables.AppendLine($" ADD {c.name} {c.type} PRIMARY KEY");
-                            else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
-                                tables.AppendLine($" ADD {c.name} {c.type} IDENTITY(1,1)");
-                            else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name && c.type_constraints == "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type} IDENTITY(1,1) UNIQUE");
-                            else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints != "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type}"); //Exemplo: int UNIQUE (somente)
-                            else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type} UNIQUE"); //Exemplo: int (somente)
-                            else if (c.prec != null)
-                                tables.AppendLine($" ADD {c.name} {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
-                            else if (c.prec != null && c.type_constraints == "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
-                            else if (c.length == null && c.type_constraints == "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
-                            else if (c.length == null)
-                                tables.AppendLine($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
-                            else if (c.length != null && c.type_constraints == "UNIQUE")
-                                tables.AppendLine($" ADD {c.name} {c.type}({c.length}) UNIQUE"); //Exemplo: varchar(25) or int (null) UNIQUE
-                            else
-                                tables.AppendLine($" ADD {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
-                            tables.AppendLine($" END");
+                            if (c.type_constraints != "FOREIGN KEY")
+                            {
+
+
+
+                                var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY"); // Lógica criada para casos de chave PK composta
+                                if (primary > 1 && c.type_constraints == "PRIMARY KEY")
+                                {
+                                    listPK.Add(c.column_constraints);
+                                }
+
+                                if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
+                                    c.length = "max";// Então forcei ele retornar "max"
+
+                                var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint" };
+                                tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
+                                tables.AppendLine();
+                                tables.AppendLine($"BEGIN");
+                                tables.Append($"ALTER TABLE {t.TableName}");
+                                //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
+                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary == 1)
+                                    tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
+                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary == 1)
+                                    tables.Append($" ADD {c.name} {c.type} PRIMARY KEY");
+                                else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
+                                    tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1)");
+                                else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name && c.type_constraints == "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1) UNIQUE");
+                                else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints != "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: int UNIQUE (somente)
+                                else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type} UNIQUE"); //Exemplo: int (somente)
+                                else if (c.prec != null)
+                                    tables.Append($" ADD {c.name} {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
+                                else if (c.prec != null && c.type_constraints == "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
+                                else if (c.length == null && c.type_constraints == "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
+                                else if (c.length == null)
+                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
+                                else if (c.length != null && c.type_constraints == "UNIQUE")
+                                    tables.Append($" ADD {c.name} {c.type}({c.length}) UNIQUE"); //Exemplo: varchar(25) or int (null) UNIQUE
+                                else if (c.type == "image" || c.type == "text")
+                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: image
+                                else
+                                    tables.AppendLine($" ADD {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
+                                tables.AppendLine($" END");
+                            }
                         });
                         tables.AppendLine($"GO");
                         tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
