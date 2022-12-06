@@ -3,14 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ConsultaDb
 {
@@ -215,6 +210,8 @@ namespace ConsultaDb
 
                     objects.ForEach(t =>
                     {
+                        Tables DistinctT = new Tables();
+
 
                         tables.AppendLine($"IF OBJECT_ID('{t.TableName}', N'U') IS NULL");
                         tables.AppendLine("BEGIN");
@@ -223,47 +220,49 @@ namespace ConsultaDb
                         int cont = 0;
                         var listPK = new List<String>();
                         var listPK1 = new List<String>();
-                        var listFK = new List<String>();
-                        int total = t.Columns.Count;
-                        int totalinit = t.Columns.Count;
-                        t.Columns.ForEach((c) =>
+                        var listConstraintRepet = new List<String>();
+
+                        DistinctT.Columns = t.Columns.Distinct(new ColumnComparer()).ToList();
+                        int total = DistinctT.Columns.Count;
+                        int totalinit = DistinctT.Columns.Count;
+                        DistinctT.Columns.ForEach((c) =>
                         {
 
                             var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
                             if (primary > 1 && c.type_constraints == "PRIMARY KEY")
                             {
-                                listPK.Add(c.column_constraints);
+                                listPK.Add(c.column_constraints); // Armazenando todas as PK em uma lista
                             }
 
                             var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
                             //var primary1 = chavesPK1.Count();
-                            var addListPK1 = from listpk1 in chavesPK1 select listpk1;
-                            foreach (var listpk1 in addListPK1)
-                            {
-                                listPK1.Add(listpk1.column_constraints);
-                            }
-
-                            var filtroFKReferenciada = t.Columns.Where(x => x.type_constraints == "FOREIGN KEY" && listPK1.Any(x => x == c.column_constraints)).ToList();
-                            var contFK = filtroFKReferenciada.Count();
-                            var listFKRef = from listfkref in filtroFKReferenciada select listfkref;
-
-                            foreach (var listfkref in listFKRef)
-                            {
-                                listFK.Add(listfkref.type_constraints);
-                            }
-
                             if (total == totalinit)
                             {
-                                var Foreign = t.Columns.Count(fk => fk.type_constraints == "FOREIGN KEY");
-                                if (Foreign > 1 && c.type_constraints == "FOREIGN KEY")
+                                var addListPK1 = from listpk1 in chavesPK1 select listpk1;
+                                //ADICIONAR UM FILTRO AQUI PARA NAO FICAR ARMAZENANDO DIVERSOS ITENS NA LIST
+
+                                foreach (var listpk1 in addListPK1)
                                 {
-                                    total -= Foreign;
+                                    listPK1.Add(listpk1.column_constraints); // Armazenando uma PK por vez em cada loop (tentar usar distinct dps)
                                 }
                             }
 
-                            // VERIFICAR POR QUE TA PREENCHENDO SÓ UM tabela(GRUCOMPRA)
+                            var filtroConstraint = t.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
+                            var constraintRepetida = filtroConstraint.Count();
+                            var listConstraintRep = from constraintRepet in filtroConstraint select constraintRepet;
 
-                            if (contFK <= 0 || listFK.Any(x => x != c.type_constraints))
+                            foreach (var constraintRepet in listConstraintRep)
+                            {
+                                listConstraintRepet.Add(constraintRepet.type_constraints);
+                            }
+
+                            if (constraintRepetida > 0 && total == totalinit)
+                            {
+                                total -= constraintRepetida;
+                            }
+
+
+                            if (constraintRepetida <= 0 || listConstraintRepet.Any(x => x != c.type_constraints))
                             {
 
                                 if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
@@ -294,9 +293,6 @@ namespace ConsultaDb
 
                                 else if (c.prec != null && c.type_constraints == "UNIQUE")
                                     tables.Append($" {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
-
-                                //else if (c.length == null && c.type_constraints == "UNIQUE")
-                                //    tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
 
                                 else if (c.length == null)
                                     tables.Append($" {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
@@ -336,10 +332,10 @@ namespace ConsultaDb
                                 }
                                 cont++;
                             }
-                            
+
                             Console.WriteLine(c.name, c.type_constraints);
                         });
-                        t.Columns.ForEach((c) =>
+                        DistinctT.Columns.ForEach((c) =>
                         {
                             if (c.type_constraints == "FOREIGN KEY")
                                 tables.AppendLine($" ALTER TABLE {t.TableName} ADD CONSTRAINT {c.name_constraint} FOREIGN KEY ({c.column_constraints}) REFERENCES {c.referenced_object} ({c.column_constraints});");
@@ -356,23 +352,47 @@ namespace ConsultaDb
                         //tables.AppendLine("-----------------------------------------------------------------------------------------------------------------");
                         tables.AppendLine();
                         // VERIFICAR AS COLUNAS
-                        t.Columns.ForEach((c) =>
+                        DistinctT.Columns.ForEach((c) =>
                         {
-                            if (c.type_constraints != "FOREIGN KEY")
+                            var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
+                            if (primary > 1 && c.type_constraints == "PRIMARY KEY")
                             {
+                                listPK.Add(c.column_constraints); // Armazenando todas as PK em uma lista
+                            }
 
+                            var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
+                            //var primary1 = chavesPK1.Count();
+                            if (total == totalinit)
+                            {
+                                var addListPK1 = from listpk1 in chavesPK1 select listpk1;
+                                //ADICIONAR UM FILTRO AQUI PARA NAO FICAR ARMAZENANDO DIVERSOS ITENS NA LIST
 
-
-                                var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY"); // Lógica criada para casos de chave PK composta
-                                if (primary > 1 && c.type_constraints == "PRIMARY KEY")
+                                foreach (var listpk1 in addListPK1)
                                 {
-                                    listPK.Add(c.column_constraints);
+                                    listPK1.Add(listpk1.column_constraints); // Armazenando uma PK por vez em cada loop (tentar usar distinct dps)
                                 }
+                            }
 
+                            var filtroConstraint = t.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
+                            var constraintRepetida = filtroConstraint.Count();
+                            var listConstraintRep = from constraintRepet in filtroConstraint select constraintRepet;
+
+                            foreach (var constraintRepet in listConstraintRep)
+                            {
+                                listConstraintRepet.Add(constraintRepet.type_constraints);
+                            }
+
+                            if (constraintRepetida > 0 && total == totalinit)
+                            {
+                                total -= constraintRepetida;
+                            }
+
+                            if (constraintRepetida <= 0 || listConstraintRepet.Any(x => x != c.type_constraints))
+                            {
                                 if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
                                     c.length = "max";// Então forcei ele retornar "max"
 
-                                var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint" };
+                                var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint", "smallint" };
                                 tables.Append($" if not exists(Select * From sys.columns Where object_id = Object_ID('{t.TableName}') and name = '{c.name}')");
                                 tables.AppendLine();
                                 tables.AppendLine($"BEGIN");
@@ -380,32 +400,42 @@ namespace ConsultaDb
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
                                 if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary == 1)
                                     tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
+
                                 else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary == 1)
                                     tables.Append($" ADD {c.name} {c.type} PRIMARY KEY");
+
                                 else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
                                     tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1)");
+
                                 else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name && c.type_constraints == "UNIQUE")
                                     tables.Append($" ADD {c.name} {c.type} IDENTITY(1,1) UNIQUE");
+
                                 else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints != "UNIQUE")
-                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: int UNIQUE (somente)
+                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: int (somente)
+
                                 else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
-                                    tables.Append($" ADD {c.name} {c.type} UNIQUE"); //Exemplo: int (somente)
+                                    tables.Append($" ADD {c.name} {c.type} UNIQUE"); //Exemplo: int  UNIQUE
+
                                 else if (c.prec != null)
                                     tables.Append($" ADD {c.name} {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
+
                                 else if (c.prec != null && c.type_constraints == "UNIQUE")
                                     tables.Append($" ADD {c.name} {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
-                                else if (c.length == null && c.type_constraints == "UNIQUE")
-                                    tables.Append($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int UNIQUE tem parenteses()
+
                                 else if (c.length == null)
                                     tables.Append($" ADD {c.name} {c.type}"); //Exemplo: varchar ou int tem parenteses()
+
                                 else if (c.length != null && c.type_constraints == "UNIQUE")
                                     tables.Append($" ADD {c.name} {c.type}({c.length}) UNIQUE"); //Exemplo: varchar(25) or int (null) UNIQUE
+
                                 else if (c.type == "image" || c.type == "text")
                                     tables.Append($" ADD {c.name} {c.type}"); //Exemplo: image
+
                                 else
-                                    tables.AppendLine($" ADD {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
+                                    tables.Append($" ADD {c.name} {c.type}({c.length})"); //Exemplo: varchar(25) or int (null)
                                 tables.AppendLine($" END");
                             }
+
                         });
                         tables.AppendLine($"GO");
                         tables.AppendLine("----------------------------------------------------------------------------------------------------------------");
