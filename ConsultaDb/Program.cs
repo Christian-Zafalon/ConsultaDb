@@ -36,7 +36,7 @@ namespace ConsultaDb
             #endregion
 
             //Conexão BD
-            const string connectionString = "Data Source=10.100.2.9; Initial Catalog=dbComlink_off_dev_fugini; Integrated Security=SSPI;";
+            const string connectionString = "Data Source=10.100.2.9; Initial Catalog=dbComlink_off_dev_linx; Integrated Security=SSPI;";
 
             //const string connectionString = "Data Source=CLK-NOTE_63; Initial Catalog=CLONE; Integrated Security=SSPI;";
 
@@ -220,49 +220,56 @@ namespace ConsultaDb
                         int cont = 0;
                         var listPK = new List<String>();
                         var listPK1 = new List<String>();
+                        var teste = new List<Column>();
                         var listConstraintRepet = new List<String>();
-
                         DistinctT.Columns = t.Columns.Distinct(new ColumnComparer()).ToList();
                         int total = DistinctT.Columns.Count;
-                        int totalinit = DistinctT.Columns.Count;
+                        int firstLoop = DistinctT.Columns.Count;
                         DistinctT.Columns.ForEach((c) =>
                         {
 
-                            var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
-                            if (primary > 1 && c.type_constraints == "PRIMARY KEY")
-                            {
-                                listPK.Add(c.column_constraints); // Armazenando todas as PK em uma lista
-                            }
+                            //var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
+                            //if (primary > 1 && c.type_constraints == "PRIMARY KEY")
+                            //{
+                            //    listPK.Add(c.column_constraints); // Armazenando todas as PK em uma lista
+                            //}
 
-                            var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
-                            //var primary1 = chavesPK1.Count();
-                            if (total == totalinit)
+                            var chavesPK1 = DistinctT.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
+                            var primary1 = chavesPK1.Count();
+                            if (total == firstLoop)
                             {
                                 var addListPK1 = from listpk1 in chavesPK1 select listpk1;
-                                //ADICIONAR UM FILTRO AQUI PARA NAO FICAR ARMAZENANDO DIVERSOS ITENS NA LIST
-
                                 foreach (var listpk1 in addListPK1)
                                 {
-                                    listPK1.Add(listpk1.column_constraints); // Armazenando uma PK por vez em cada loop (tentar usar distinct dps)
+                                    listPK1.Add(listpk1.column_constraints);
                                 }
                             }
 
-                            var filtroConstraint = t.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
+                            var filtroConstraint = DistinctT.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
                             var constraintRepetida = filtroConstraint.Count();
                             var listConstraintRep = from constraintRepet in filtroConstraint select constraintRepet;
 
                             foreach (var constraintRepet in listConstraintRep)
                             {
+                                teste.Add(constraintRepet);
+                                DistinctT.Columns.Remove(constraintRepet);
                                 listConstraintRepet.Add(constraintRepet.type_constraints);
                             }
 
-                            if (constraintRepetida > 0 && total == totalinit)
+                            if (constraintRepetida > 0 && total == firstLoop)
                             {
                                 total -= constraintRepetida;
                             }
 
+                            if (constraintRepetida <= 0 || filtroConstraint.Any(x => x.type_constraints == c.type_constraints || x.name_constraint == c.name_constraint)) // PROVAVELMENTE A LOGICA ESTA ERRADA, DEVE SER NECESSARIO VERIFICAR SE A FK É SÓ FK E NAO PK FK
+                            {
+                                Console.WriteLine(c.name, c.type_constraints + "AQUI");
 
-                            if (constraintRepetida <= 0 || listConstraintRepet.Any(x => x != c.type_constraints))
+                            }
+
+
+
+                            if (constraintRepetida <= 0 || filtroConstraint.Any(x => x.type_constraints == c.type_constraints || x.name_constraint == c.name_constraint)) // PROVAVELMENTE A LOGICA ESTA ERRADA, DEVE SER NECESSARIO VERIFICAR SE A FK É SÓ FK E NAO PK FK
                             {
 
                                 if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
@@ -270,10 +277,10 @@ namespace ConsultaDb
 
                                 var types = new List<string> { "int", "money", "bigint", "smallmoney", "tinyint", "smallint" };
 
-                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary == 1)
+                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary1 == 1)
                                     tables.Append($" {c.name} {c.type} IDENTITY(1,1) PRIMARY KEY");
 
-                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary == 1)
+                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary1 == 1)
                                     tables.Append($" {c.name} {c.type} PRIMARY KEY");
 
                                 else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
@@ -311,14 +318,18 @@ namespace ConsultaDb
                                     if (c.nullable == "NO")
                                     {
                                         tables.AppendLine($" NOT NULL");
+                                        if (listPK1.Any(x => x == x) && primary1 > 1)  // PENSAR NA LOGICA AQUI
+                                        {
+                                            tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK1)})");
+                                        }
                                         tables.AppendLine(")");
                                     }
                                     else
                                     {
                                         tables.AppendLine($" NULL");
-                                        if (listPK.Any(x => x == x) && primary > 1)  // PENSAR NA LOGICA AQUI
+                                        if (listPK1.Any(x => x == x) && primary1 > 1)  // PENSAR NA LOGICA AQUI
                                         {
-                                            tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK)})");
+                                            tables.AppendLine($"CONSTRAINT PK_{t.TableName} PRIMARY KEY ({string.Join(",", listPK1)})");
                                         }
                                         tables.AppendLine(")");
                                     }
@@ -331,9 +342,9 @@ namespace ConsultaDb
                                         tables.AppendLine($" NULL,");
                                 }
                                 cont++;
+                                firstLoop -= total;
                             }
 
-                            Console.WriteLine(c.name, c.type_constraints);
                         });
                         DistinctT.Columns.ForEach((c) =>
                         {
@@ -362,7 +373,7 @@ namespace ConsultaDb
 
                             var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
                             //var primary1 = chavesPK1.Count();
-                            if (total == totalinit)
+                            if (total == firstLoop)
                             {
                                 var addListPK1 = from listpk1 in chavesPK1 select listpk1;
                                 //ADICIONAR UM FILTRO AQUI PARA NAO FICAR ARMAZENANDO DIVERSOS ITENS NA LIST
@@ -382,7 +393,7 @@ namespace ConsultaDb
                                 listConstraintRepet.Add(constraintRepet.type_constraints);
                             }
 
-                            if (constraintRepetida > 0 && total == totalinit)
+                            if (constraintRepetida > 0 && total == firstLoop)
                             {
                                 total -= constraintRepetida;
                             }
