@@ -252,7 +252,7 @@ namespace ConsultaDb
                             foreach (var constraintRepet in listConstraintRep)
                             {
                                 teste.Add(constraintRepet);
-                                DistinctT.Columns.Remove(constraintRepet);
+                                //DistinctT.Columns.Remove(constraintRepet);
                                 listConstraintRepet.Add(constraintRepet.type_constraints);
                             }
 
