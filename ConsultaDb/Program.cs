@@ -288,8 +288,11 @@ namespace ConsultaDb
                                 else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
                                     tables.Append($" [{c.name}] {c.type} UNIQUE"); //Exemplo: int  UNIQUE
 
-                                else if (c.prec != null )
+                                else if (c.prec != null && c.scale != null )
                                     tables.Append($" [{c.name}] {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
+
+                                else if (c.prec != null && c.scale == null)
+                                    tables.Append($" [{c.name}] {c.type}({c.prec})"); //Exemplo: numeric(50)
 
                                 else if (c.prec != null && c.type_constraints == "UNIQUE")
                                     tables.Append($" [{c.name}] {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
@@ -358,41 +361,36 @@ namespace ConsultaDb
                         // VERIFICAR AS COLUNAS
                         DistinctT.Columns.ForEach((c) =>
                         {
-                            var primary = t.Columns.Count(pk => pk.type_constraints == "PRIMARY KEY");
-                            if (primary > 1 && c.type_constraints == "PRIMARY KEY")
-                            {
-                                listPK.Add(c.column_constraints); // Armazenando todas as PK em uma lista
-                            }
-
-                            var chavesPK1 = t.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
-                            //var primary1 = chavesPK1.Count();
+                            var chavesPK1 = DistinctT.Columns.Where(x => x.type_constraints == "PRIMARY KEY").ToList();
+                            var primary1 = chavesPK1.Count();
                             if (total == firstLoop)
                             {
                                 var addListPK1 = from listpk1 in chavesPK1 select listpk1;
-                                //ADICIONAR UM FILTRO AQUI PARA NAO FICAR ARMAZENANDO DIVERSOS ITENS NA LIST
-
                                 foreach (var listpk1 in addListPK1)
                                 {
-                                    listPK1.Add(listpk1.column_constraints); // Armazenando uma PK por vez em cada loop (tentar usar distinct dps)
+                                    listPK1.Add(listpk1.column_constraints);
                                 }
                             }
 
-                            var filtroConstraint = t.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
+                            var filtroConstraint = DistinctT.Columns.Where(x => listPK1.Any(pks => pks == x.column_constraints) && x.type_constraints == "FOREIGN KEY" || x.type_constraints == "UNIQUE").ToList();
                             var constraintRepetida = filtroConstraint.Count();
                             var listConstraintRep = from constraintRepet in filtroConstraint select constraintRepet;
 
                             foreach (var constraintRepet in listConstraintRep)
                             {
+                                filtroValidacao.Columns.Remove(constraintRepet);
                                 listConstraintRepet.Add(constraintRepet.type_constraints);
                             }
+
 
                             if (constraintRepetida > 0 && total == firstLoop)
                             {
                                 total -= constraintRepetida;
                             }
 
-                            if (constraintRepetida <= 0 || listConstraintRepet.Any(x => x != c.type_constraints))
+                            if (filtroValidacao.Columns.Any(v => v.name == c.name && v.type_constraints == c.type_constraints))
                             {
+
                                 if (c.length == "-1")// Na consulta, quando o Length é "max" ele retorna -1
                                     c.length = "max";// Então forcei ele retornar "max"
 
@@ -402,10 +400,10 @@ namespace ConsultaDb
                                 tables.AppendLine($"BEGIN");
                                 tables.Append($"ALTER TABLE {t.TableName}");
                                 //Segunda condição verifica se o tamanho do type é nulo, se for (PROVAVEL INT)
-                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary == 1)
+                                if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 1 && primary1 == 1)
                                     tables.Append($" ADD [{c.name}] {c.type} IDENTITY(1,1) PRIMARY KEY");
 
-                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary == 1)
+                                else if (c.type_constraints == "PRIMARY KEY" && c.is_identity == 0 && primary1 == 1)
                                     tables.Append($" ADD [{c.name}] {c.type} PRIMARY KEY");
 
                                 else if (c.length == null && c.is_identity == 1 && c.column_constraints != c.name)
@@ -420,8 +418,11 @@ namespace ConsultaDb
                                 else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
                                     tables.Append($" ADD [{c.name}] {c.type} UNIQUE"); //Exemplo: int  UNIQUE
 
-                                else if (c.prec != null)
+                                else if (c.prec != null && c.scale != null)
                                     tables.Append($" ADD [{c.name}] {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
+
+                                else if (c.prec != null && c.scale == null)
+                                    tables.Append($" ADD [{c.name}] {c.type}({c.prec})"); //Exemplo: numeric(50)
 
                                 else if (c.prec != null && c.type_constraints == "UNIQUE")
                                     tables.Append($" ADD [{c.name}] {c.type}({c.prec},{c.scale}) UNIQUE"); //Exemplo: numeric(8,3)
