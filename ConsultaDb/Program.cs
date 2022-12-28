@@ -256,7 +256,7 @@ namespace ConsultaDb
                                 listConstraintRepet.Add(constraintRepet.type_constraints);
                             }
 
-                            
+
                             if (constraintRepetida > 0 && total == firstLoop)
                             {
                                 total -= constraintRepetida;
@@ -288,7 +288,7 @@ namespace ConsultaDb
                                 else if (c.length == null && types.Any(x => x == c.type) && c.type_constraints == "UNIQUE")
                                     tables.Append($" [{c.name}] {c.type} UNIQUE"); //Exemplo: int  UNIQUE
 
-                                else if (c.prec != null && c.scale != null )
+                                else if (c.prec != null && c.scale != null)
                                     tables.Append($" [{c.name}] {c.type}({c.prec},{c.scale}) "); //Exemplo: numeric(8,3)
 
                                 else if (c.prec != null && c.scale == null)
